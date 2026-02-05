@@ -63,9 +63,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: 'Invalid request body.' }, { status: 400 });
   }
 
-  const honeypot = pickField(data, ['website']);
-  if (honeypot) {
-    return NextResponse.json({ ok: true }, { status: 200 });
+  // ══════════════════════════════════════════════════════════════════════════
+  // SPAM PROTECTION - Tier 1: Honeypots, Time Validation, Content Filtering
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // 1. Honeypot checks - multiple trap fields bots commonly fill
+  const honeypotFields = ['website', 'company_url', 'fax', 'address2'];
+  for (const field of honeypotFields) {
+    if (pickField(data, [field])) {
+      // Silently succeed to not alert bot operators
+      return NextResponse.json({ ok: true }, { status: 200 });
+    }
+  }
+
+  // 2. Time-based validation - reject submissions under 3 seconds
+  const formTimestamp = pickField(data, ['_ts']);
+  if (formTimestamp) {
+    const submissionTime = parseInt(formTimestamp, 10);
+    const timeDiff = Date.now() - submissionTime;
+    const MIN_SUBMISSION_TIME_MS = 3000; // 3 seconds
+    if (!isNaN(submissionTime) && timeDiff < MIN_SUBMISSION_TIME_MS) {
+      // Too fast - likely a bot
+      return NextResponse.json({ ok: true }, { status: 200 });
+    }
   }
 
   const name = pickField(data, ['name', 'fullName', 'fullname']);
@@ -84,12 +104,82 @@ export async function POST(req: Request) {
     );
   }
 
+  // Input format validation (mirrors frontend patterns)
+  const namePattern = /^[A-Za-z\s\-']{2,50}$/;
+  if (!namePattern.test(name)) {
+    return NextResponse.json(
+      { ok: false, error: 'Name should contain only letters, spaces, and hyphens (2-50 characters).' },
+      { status: 400 }
+    );
+  }
+
+  const phoneDigits = phone.replace(/\D/g, '');
+  if (phoneDigits.length < 10 || phoneDigits.length > 11) {
+    return NextResponse.json(
+      { ok: false, error: 'Please enter a valid 10-digit phone number.' },
+      { status: 400 }
+    );
+  }
+
+  const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  if (!emailPattern.test(email)) {
+    return NextResponse.json(
+      { ok: false, error: 'Please enter a valid email address.' },
+      { status: 400 }
+    );
+  }
+
   if (message && message.length > MAX_MESSAGE_LENGTH) {
     return NextResponse.json(
       { ok: false, error: 'Message is too long. Please keep it under 5000 characters.' },
       { status: 400 }
     );
   }
+
+  // 3. Content filtering - detect spam patterns
+  const combinedText = `${name} ${email} ${message}`.toLowerCase();
+
+  // 3a. Check for excessive URLs (more than 2 is suspicious)
+  const urlPattern = /https?:\/\/|www\./gi;
+  const urlCount = (combinedText.match(urlPattern) || []).length;
+  if (urlCount > 2) {
+    return NextResponse.json({ ok: true }, { status: 200 });
+  }
+
+  // 3b. Check for spam keywords
+  const spamKeywords = [
+    'crypto', 'bitcoin', 'ethereum', 'nft',
+    'casino', 'poker', 'gambling', 'bet ',
+    'viagra', 'cialis', 'pharmacy',
+    'seo services', 'backlinks', 'web traffic',
+    'nigerian prince', 'lottery winner', 'congratulations you won',
+    'click here now', 'act now', 'limited time',
+    'work from home', 'make money fast', 'earn $$',
+  ];
+  if (spamKeywords.some(keyword => combinedText.includes(keyword))) {
+    return NextResponse.json({ ok: true }, { status: 200 });
+  }
+
+  // 3c. Check for all-caps messages (spam indicator)
+  if (message && message.length > 20) {
+    const upperCount = (message.match(/[A-Z]/g) || []).length;
+    const letterCount = (message.match(/[a-zA-Z]/g) || []).length;
+    if (letterCount > 0 && upperCount / letterCount > 0.7) {
+      return NextResponse.json({ ok: true }, { status: 200 });
+    }
+  }
+
+  // 3d. Check for non-ASCII character overload (foreign spam)
+  const nonAsciiPattern = /[^\x00-\x7F]/g;
+  const nonAsciiCount = (combinedText.match(nonAsciiPattern) || []).length;
+  if (combinedText.length > 0 && nonAsciiCount / combinedText.length > 0.3) {
+    return NextResponse.json({ ok: true }, { status: 200 });
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // END SPAM PROTECTION
+  // ══════════════════════════════════════════════════════════════════════════
+
 
   const resendApiKey = process.env.RESEND_API_KEY;
   const toEmail = process.env.LEAD_TO_EMAIL;

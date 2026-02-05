@@ -152,6 +152,16 @@ export default function ThreeDFencing() {
   const [formStatus, setFormStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
   const [formError, setFormError] = useState('');
   const [pageUrl, setPageUrl] = useState('');
+  const [phoneValue, setPhoneValue] = useState('');
+
+  // Format phone as (XXX) XXX-XXXX
+  const formatPhone = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 10);
+    if (digits.length === 0) return '';
+    if (digits.length <= 3) return `(${digits}`;
+    if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  };
 
   // Lightbox State
   const [selectedJob, setSelectedJob] = useState<typeof recentJobs[0] | null>(null);
@@ -194,6 +204,7 @@ export default function ThreeDFencing() {
 
     if (honeypot) {
       form.reset();
+      setPhoneValue('');
       setFormStatus('success');
       return;
     }
@@ -218,6 +229,7 @@ export default function ThreeDFencing() {
       }
 
       form.reset();
+      setPhoneValue('');
       setFormStatus('success');
     } catch (error) {
       setFormStatus('error');
@@ -344,13 +356,13 @@ export default function ThreeDFencing() {
       {/* ═══════════════════════════════════════════════════════════════════════
           HERO - Full Background with Quote Form
       ═══════════════════════════════════════════════════════════════════════ */}
-      <section className="relative min-h-[90vh] overflow-hidden -mt-[72px] pt-[72px]">
+      <section className="relative min-h-[105vh] flex flex-col overflow-hidden -mt-[72px] pt-[72px]" style={{ minHeight: '108vh' }}>
         {/* Changed background to something more fence/construction related or generic structure */}
         <div className="absolute inset-0" style={{ backgroundImage: 'url(/images/hero-bg.png)', backgroundPosition: 'center', backgroundSize: 'cover' }} />
         <div className="absolute inset-0" style={{ background: 'linear-gradient(90deg, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.85) 50%, rgba(0,0,0,0.75) 100%)' }} />
 
-        <div className={`${shellClass} relative z-10 py-20 lg:py-28`}>
-          <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-start">
+        <div className={`${shellClass} relative z-10 py-12 lg:py-0 flex-1 lg:flex lg:items-center`}>
+          <div className="grid gap-12 lg:grid-cols-[1.1fr_0.9fr] lg:items-center w-full pb-20 lg:pb-0">
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
               {/* Top Rated Badge */}
               <div className="inline-flex items-center gap-2 px-4 py-2" style={{ backgroundColor: accent }}>
@@ -395,13 +407,54 @@ export default function ThreeDFencing() {
               </div>
               <p className="text-sm text-slate-500 mb-6 font-medium">No obligation. 100% Secure.</p>
               <form className="space-y-4" action="/api/lead" method="POST" onSubmit={handleLeadSubmit}>
+                {/* Honeypot fields - invisible to users, bots fill these */}
                 <input type="text" name="website" style={{ display: 'none' }} tabIndex={-1} autoComplete="off" aria-hidden="true" />
+                <input type="text" name="company_url" style={{ position: 'absolute', left: '-9999px', top: '-9999px' }} tabIndex={-1} autoComplete="off" aria-hidden="true" />
+                <input type="text" name="fax" style={{ opacity: 0, height: 0, width: 0, position: 'absolute' }} tabIndex={-1} autoComplete="off" aria-hidden="true" />
+                <input type="text" name="address2" className="hidden" tabIndex={-1} autoComplete="off" aria-hidden="true" />
+                {/* Time-based validation - timestamp when form rendered */}
+                <input type="hidden" name="_ts" value={Date.now().toString()} />
                 <input type="hidden" name="page" value={pageUrl} />
                 <div className="grid grid-cols-2 gap-4">
-                  <div><label className="block text-xs font-semibold text-slate-700 mb-1">Name *</label><input required name="name" type="text" placeholder="Your Name" className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900" /></div>
-                  <div><label className="block text-xs font-semibold text-slate-700 mb-1">Phone *</label><input required name="phone" type="tel" placeholder="(281) 555-0123" className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900" /></div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Name *</label>
+                    <input
+                      required
+                      name="name"
+                      type="text"
+                      placeholder="Your Name"
+                      pattern="[A-Za-z\s\-']{2,50}"
+                      title="Letters, spaces, and hyphens only (2-50 characters)"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 invalid:border-red-300 focus:invalid:border-red-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Phone *</label>
+                    <input
+                      required
+                      name="phone"
+                      type="tel"
+                      placeholder="(281) 555-0123"
+                      value={phoneValue}
+                      onChange={(e) => setPhoneValue(formatPhone(e.target.value))}
+                      pattern="\(\d{3}\) \d{3}-\d{4}"
+                      title="Please enter a valid 10-digit phone number"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 invalid:border-red-300 focus:invalid:border-red-400"
+                    />
+                  </div>
                 </div>
-                <div><label className="block text-xs font-semibold text-slate-700 mb-1">Email *</label><input required name="email" type="email" placeholder="you@email.com" className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900" /></div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Email *</label>
+                  <input
+                    required
+                    name="email"
+                    type="email"
+                    placeholder="you@email.com"
+                    pattern="[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$"
+                    title="Please enter a valid email address"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 invalid:border-red-300 focus:invalid:border-red-400"
+                  />
+                </div>
                 <div><label className="block text-xs font-semibold text-slate-700 mb-1">Service Needed *</label><select required name="service" className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm bg-white text-slate-900"><option value="">Select a service...</option>{[config.primaryService, ...services].map(s => <option key={s} value={s}>{s}</option>)}</select></div>
                 <div><label className="block text-xs font-semibold text-slate-700 mb-1">Project Details</label><textarea name="message" rows={3} placeholder="Describe your project (e.g. 50ft cedar fence)..." className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 resize-none" /></div>
                 <button type="submit" disabled={formStatus === 'sending'} className="w-full rounded-lg py-4 text-base font-bold text-white shadow-lg disabled:opacity-70" style={{ backgroundColor: accent }}>
@@ -428,7 +481,7 @@ export default function ThreeDFencing() {
         </div>
 
         {/* Scrolling Reviews Ticker - Liquid Glass Effect */}
-        <div className="absolute bottom-0 left-0 right-0 backdrop-blur-lg py-3 overflow-hidden border-t border-white/20 shadow-lg z-20" style={{ backgroundColor: `${accent}40` }}>
+        <div className="absolute bottom-0 left-0 right-0 z-20 w-full backdrop-blur-lg py-3 overflow-hidden border-t border-white/20 shadow-lg" style={{ backgroundColor: `${accent}40` }}>
           <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none" /> {/* Gloss sheen */}
           <div className="flex animate-marquee whitespace-nowrap relative z-10">
             {config.testimonials.concat(config.testimonials).map((review, i) => (
@@ -621,8 +674,8 @@ export default function ThreeDFencing() {
 
       {/* Reviews - Dark Google Themed Section */}
       <section id="proof" className="relative py-24 overflow-hidden" style={{ borderTop: `4px solid ${accent}`, borderBottom: `4px solid ${accent}` }}>
-        <div className="absolute inset-0 bg-zinc-900" />
-        <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'url(/images/reviews-bg.png)', backgroundSize: 'cover', backgroundPosition: 'center', filter: 'grayscale(100%)' }} />
+        <div className="absolute inset-0" style={{ backgroundImage: 'url(/images/reviews-bg.png)', backgroundSize: 'cover', backgroundPosition: 'center' }} />
+        <div className="absolute inset-0 bg-black/70" />
 
         <div className={`${shellClass} relative z-10`}>
           <div className="flex flex-col items-center justify-center text-center mb-16">
@@ -639,7 +692,7 @@ export default function ThreeDFencing() {
 
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {[...config.testimonials, ...config.testimonials].slice(0, 6).map((testimonial, idx) => (
-              <div key={`${testimonial.name}-${idx}`} className="bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-md p-6 rounded-xl shadow-2xl border-t-4 hover:-translate-y-1 transition-transform duration-300 border-x border-b border-white/5 relative group" style={{ borderTopColor: idx % 2 === 0 ? '#4285F4' : '#34A853' }}>
+              <div key={`${testimonial.name}-${idx}`} className="flex flex-col h-full bg-gradient-to-br from-white/10 to-white/5 backdrop-blur-md p-6 rounded-xl shadow-2xl border-t-4 hover:-translate-y-1 transition-transform duration-300 border-x border-b border-white/5 relative group" style={{ borderTopColor: idx % 2 === 0 ? '#4285F4' : '#34A853' }}>
                 <div className="absolute inset-0 bg-gradient-to-br from-transparent to-white/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl pointer-events-none" />
                 <div className="flex items-start justify-between mb-4 relative z-10">
                   <div className="flex items-center gap-3">
